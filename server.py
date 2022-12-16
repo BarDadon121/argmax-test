@@ -11,6 +11,9 @@ from flask import Flask, request, send_from_directory, render_template, redirect
 from werkzeug.utils import secure_filename
 from typing import List, Dict, Tuple, Optional
 from vecsim import SciKitIndex, RedisIndex
+from PIL import Image
+import torch
+import clip
 
 __dir__ = Path(__file__).absolute().parent
 upload_dir = __dir__ / "upload"
@@ -49,14 +52,18 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in {'jpg', 'jpeg', 'png'}
 
 def embed_image(image_path):
-    # random 512 dim vector
-    # TODO: implement
-    return np.random.rand(512)
+    with torch.no_grad():
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load("ViT-B/32", device=device)
+        image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
+        return model.encode_image(image).cpu()
 
 def embed_text(text):
-    # random 512 dim vector
-    # TODO: implement
-    return np.random.rand(512)
+    with torch.no_grad():
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load("ViT-B/32", device=device)
+        text_tokens = clip.tokenize(text, truncate=True).to(device)
+        return model.encode_text(text_tokens).cpu()
 
 @app.route('/imgsearch', methods=['POST','GET'])
 def imgsearch():
@@ -121,22 +128,17 @@ def page_not_found(e):
 if __name__ == "__main__":
     print("Loading data...")
     SAMPLE_SIZE = 2000
-    # TODO:
-    # with (data_dir/"clip_ids.json").open('r') as f:
-    #    embedding_ids = json.load(f)
+    with (data_dir/"clip_ids.json").open('r') as f:
+            embedding_ids = json.load(f)
     df = pd.read_parquet(data_dir/"product_images.parquet")  
     df=df[df["primary_image"].str.endswith(".jpg")|df["primary_image"].str.endswith(".png")].rename(columns={"asin":"id"})
-    # TODO: remove this line and read the proper ids
-    embedding_ids = list(df["id"].sample(SAMPLE_SIZE))
     df["title"]=df["title"].fillna("")
     df["has_emb"]=df["id"].isin(embedding_ids)
     df=df[df["has_emb"]]
 
     print("Indexing...")
     sim = SciKitIndex("cosine",512)
-    # TODO:
-    # item_embedding = np.load(data_dir/"clip_emb.npy")
-    item_embedding = np.random.random((SAMPLE_SIZE,512))
+    item_embedding = np.load(data_dir/"clip_emb.npy")
     sim.add_items(item_embedding, embedding_ids)
     sim.init()
     
