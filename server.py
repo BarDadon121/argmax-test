@@ -21,6 +21,7 @@ data_dir = __dir__ / "data"
 upload_dir.mkdir(exist_ok=True)
 NUMBER_OF_RESULTS = 12
 app = Flask(__name__)
+cart = set()
 
 @dataclass
 class Recommendation:
@@ -84,7 +85,7 @@ def imgsearch():
         df_results = df[df["id"].isin(ids)]
 
         recs=[
-            Recommendation(row["id"],row["primary_image"],row["title"], False,round(d*100,3))
+            Recommendation(row["id"],row["primary_image"],row["title"], row["id"] in cart,round(d*100,3))
             for d,(idx,row) in sorted(zip(dists,df_results.iterrows()))
         ]
         return render_template('index.html', items=recs, recommendations=recs)
@@ -105,7 +106,7 @@ def txtsearch():
     df_results = df[df["id"].isin(ids)]
 
     recs=[
-        Recommendation(row["id"],row["primary_image"],row["title"], False,round(d*100,3))
+        Recommendation(row["id"],row["primary_image"],row["title"], row["id"] in cart,round(d*100,3))
         for d,(idx,row) in sorted(zip(dists,df_results.iterrows()))
     ]
     return render_template('results.html', recommendations=recs)
@@ -123,6 +124,14 @@ def add_no_cache(response):
 def page_not_found(e):
     return render_template("404.html")
 
+@app.route('/cart/<id>', methods=['GET'])
+def add_to_cart(id):
+    if id in cart:
+        cart.remove(id)
+        return "Item removed from cart"
+    else:
+        cart.add(id)
+        return "Item added to cart"
 
 
 if __name__ == "__main__":
