@@ -81,7 +81,17 @@ def imgsearch():
 
         vec = embed_image(upload_dir/filename)
         (upload_dir/filename).unlink()
-        dists, ids = sim.search(vec ,NUMBER_OF_RESULTS)
+        cartvec = sim.get_items(cart)
+        lst = [t for t in cartvec]
+        avg = []
+        if lst:
+            avg = [np.average(lst, axis=0)]
+            avg.append(vec.numpy())
+            w_avg = np.average(avg, axis=0, weights=[0.1, 0.9])
+            dists, ids = sim.search(w_avg ,NUMBER_OF_RESULTS)
+        else:
+            dists, ids = sim.search(vec ,NUMBER_OF_RESULTS)
+    
         df_results = df[df["id"].isin(ids)]
 
         recs=[
@@ -102,7 +112,17 @@ def index():
 def txtsearch():
     txt = str(request.form.get('txt', ""))
     vec = embed_text(txt)
-    dists, ids = sim.search(vec ,NUMBER_OF_RESULTS)
+    cartvec = sim.get_items(cart)
+    lst = [t for t in cartvec]
+    avg = []
+    if lst:
+        avg = [np.average(lst, axis=0)]
+        avg.append(vec.numpy())
+        w_avg = np.average(avg, axis=0, weights=[0.1, 0.9])
+        dists, ids = sim.search(w_avg ,NUMBER_OF_RESULTS)
+    else:
+        dists, ids = sim.search(vec ,NUMBER_OF_RESULTS)
+    
     df_results = df[df["id"].isin(ids)]
 
     recs=[
@@ -126,12 +146,17 @@ def page_not_found(e):
 
 @app.route('/cart/<id>', methods=['GET'])
 def add_to_cart(id):
+    df_results = df[df["id"].isin([id])]
+    recs=[
+        Recommendation(row["id"],row["primary_image"],row["title"], row["id"] in cart,1)
+        for (idx,row) in sorted(df_results.iterrows())
+    ]
     if id in cart:
         cart.remove(id)
-        return "Item removed from cart"
+        return render_template('toggle.html', rec=recs[0])
     else:
         cart.add(id)
-        return "Item added to cart"
+        return render_template('toggle.html', rec=recs[0])
 
 
 if __name__ == "__main__":
@@ -150,6 +175,5 @@ if __name__ == "__main__":
     item_embedding = np.load(data_dir/"clip_emb.npy")
     sim.add_items(item_embedding, embedding_ids)
     sim.init()
-    
     print("Starting server...")
     app.run(port=8080, host='0.0.0.0', debug=True)
